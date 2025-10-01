@@ -1,51 +1,66 @@
 import streamlit as st
 import matplotlib.pyplot as plt
-import math
+import numpy as np
+from fpdf import FPDF
+import tempfile
+import os
 
-# Titulek aplikace
-st.set_page_config(page_title="Body na kružnici", page_icon="🎯", layout="centered")
-st.title("🎯 Generátor bodů na kružnici")
+st.title("Body na kružnici")
 
-st.markdown(
-    """
-    Tato aplikace vykreslí body na kružnici podle zadaných parametrů.
-    - Nastav **střed kružnice (X, Y)**  
-    - Zvol **poloměr a počet bodů**  
-    - Vyber **barvu bodů**  
-    - Graf má číselné osy včetně jednotek (metry)  
-    - Klikni na tlačítko pro **uložení obrázku**
-    """
-)
+# Vstupy
+x_center = st.number_input("Souřadnice středu X", value=0.0)
+y_center = st.number_input("Souřadnice středu Y", value=0.0)
+radius = st.number_input("Poloměr kružnice (m)", value=5.0, min_value=0.1)
+points = st.number_input("Počet bodů", min_value=1, value=8)
+color = st.color_picker("Barva bodů", "#ff0000")
 
-# --- Ovládací prvky ---
-st.sidebar.header("⚙️ Parametry kružnice")
+# Výpočet bodů
+angles = np.linspace(0, 2*np.pi, int(points), endpoint=False)
+x_points = x_center + radius * np.cos(angles)
+y_points = y_center + radius * np.sin(angles)
 
-x0 = st.sidebar.slider("Střed X [m]", -20.0, 20.0, 0.0, step=0.5)
-y0 = st.sidebar.slider("Střed Y [m]", -20.0, 20.0, 0.0, step=0.5)
-r = st.sidebar.slider("Poloměr [m]", 1.0, 20.0, 5.0, step=0.5)
-n = st.sidebar.slider("Počet bodů", 3, 500, 10, step=1)
-barva = st.sidebar.selectbox("Barva bodů", ["blue", "red", "green", "purple", "orange"])
-
-# --- Výpočet bodů ---
-x, y = [], []
-for i in range(n):
-    angle = 2 * math.pi * i / n
-    x.append(x0 + r * math.cos(angle))
-    y.append(y0 + r * math.sin(angle))
-
-# --- Vykreslení ---
-fig, ax = plt.subplots(figsize=(6,6))
-ax.scatter(x, y, c=barva, s=60, edgecolors="black")
-ax.set_aspect('equal')
-ax.set_xlabel("X [m]")
-ax.set_ylabel("Y [m]")
-ax.set_title(f"{n} bodů na kružnici\n(střed=({x0}, {y0}), poloměr={r} m)")
+# Vykreslení grafu
+fig, ax = plt.subplots()
+ax.plot(x_points, y_points, "o", color=color)
+circle = plt.Circle((x_center, y_center), radius, fill=False, linestyle="--")
+ax.add_artist(circle)
+ax.set_xlabel("x [m]")
+ax.set_ylabel("y [m]")
+ax.set_aspect("equal", adjustable="box")
 ax.grid(True)
 
 st.pyplot(fig)
 
-# --- Uložení obrázku ---
-if st.button("💾 Uložit obrázek jako PNG"):
-    fig.savefig("kruh.png")
-    st.success("✅ Obrázek byl uložen jako 'kruh.png'")
+# Info o autorovi
+if st.checkbox("O aplikaci a autorovi"):
+    st.write("""
+    **Autor:** Martin Růžička  
+    **Kontakt:** martin1.ruzicka@seznam.cz  
+    **Použité technologie:** Python, Streamlit, Matplotlib, FPDF  
+    """)
 
+# Export do PDF
+if st.button("Uložit do PDF"):
+    tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    fig.savefig(tmpfile.name)
+
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, "Body na kruznici - Report", ln=True, align="C")
+    pdf.cell(200, 10, f"Stred: ({x_center}, {y_center})", ln=True)
+    pdf.cell(200, 10, f"Polomer: {radius} m", ln=True)
+    pdf.cell(200, 10, f"Pocet bodu: {points}", ln=True)
+    pdf.cell(200, 10, f"Barva bodu: {color}", ln=True)
+    pdf.cell(200, 10, "Autor: Jan Novák", ln=True)
+    pdf.cell(200, 10, "Kontakt: jan.novak@email.cz", ln=True)
+    pdf.image(tmpfile.name, x=50, y=80, w=100)
+
+    pdf_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    pdf.output(pdf_file.name)
+
+    with open(pdf_file.name, "rb") as f:
+        st.download_button("Stáhnout PDF", f, file_name="report.pdf")
+
+    os.unlink(tmpfile.name)
+    os.unlink(pdf_file.name)
